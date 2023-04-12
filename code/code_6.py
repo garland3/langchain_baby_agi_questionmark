@@ -1,25 +1,25 @@
-# Import necessary libraries
-import pandas as pd
-from sklearn.model_selection import GridSearchCV
-from sklearn.ensemble import RandomForestRegressor
-# Read in data
+
+import os
+
 data = pd.read_csv('data.csv')
-# Split data into features and target
-X = data.drop('temperature', axis=1)
-y = data['temperature']
-# Create a Random Forest Regressor
-rf = RandomForestRegressor()
-# Create a dictionary of hyperparameters to tune
-param_grid = {
-    'n_estimators': [100, 200, 300],
-    'max_depth': [3, 5, 7],
-    'min_samples_split': [2, 4, 6]
-}
-# Use GridSearchCV to tune the hyperparameters
-grid_search = GridSearchCV(rf, param_grid, cv=5, scoring='neg_mean_squared_error')
-grid_search.fit(X, y)
-# Retrain the model with the optimal hyperparameters
-rf_optimal = grid_search.best_estimator_
-# Evaluate the performance of the model
-score = rf_optimal.score(X, y)
-print('Model performance: {}'.format(score))
+X_train, X_test, y_train, y_test = train_test_split(data.drop('temperature', axis=1),
+                                                    data['temperature'],
+                                                    test_size=0.2,
+                                                    random_state=0)
+parameters = {'max_depth': [2, 4, 6, 8],
+              'min_samples_leaf': [2, 4, 6, 8],
+              'min_samples_split': [2, 4, 6, 8]}
+clf = GridSearchCV(DecisionTreeRegressor(), parameters, cv=5)
+clf.fit(X_train, y_train)
+model = DecisionTreeRegressor(max_depth=clf.best_params_['max_depth'],
+                              min_samples_leaf=clf.best_params_['min_samples_leaf'],
+                              min_samples_split=clf.best_params_['min_samples_split'])
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+accuracy = r2_score(y_test, y_pred)
+
+features = list(data.columns.drop('temperature'))
+summary = f"The data used for the model consists of {features} and the target variable is temperature."
+print(summary)
+print(f"The model achieved an accuracy of {accuracy} on the test set.")
+os.system('echo "Todo List: \n- Tune additional model parameters \n- Try different model architectures \n- Try different hyperparameter optimization techniques."')

@@ -1,13 +1,27 @@
-# Load data from data.csv
-import pandas as pd
+
+import os
+
+try:
+    import seaborn as sns
+except ModuleNotFoundError:
+    os.system('pip install seaborn')
+    import seaborn as sns
+
 data = pd.read_csv('data.csv')
-# Create machine learning model
-from sklearn.linear_model import LinearRegression
-model = LinearRegression()
-model.fit(data[['x1', 'x2', 'x3']], data['y'])
-# Make predictions on new data
-predictions = model.predict(data[['x1', 'x2', 'x3']])
-# Compare performance of model to other machine learning models
-from sklearn.metrics import mean_squared_error
-mse = mean_squared_error(data['y'], predictions)
-print('Mean Squared Error:', mse)
+plt.plot(data['time'], data['accuracy'])
+plt.title('Model Accuracy Over Time')
+plt.xlabel('Time')
+plt.ylabel('Accuracy')
+plt.show()
+sns.barplot(x=data['time'], y=data['precision'], label='Precision')
+sns.barplot(x=data['time'], y=data['recall'], label='Recall')
+plt.title('Model Precision and Recall Scores')
+plt.xlabel('Time')
+plt.ylabel('Score')
+plt.legend()
+plt.show()
+plt.plot(data['time'], data['mse'])
+plt.title('Model Mean Squared Error')
+plt.xlabel('Time')
+plt.ylabel('MSE')
+plt.show()

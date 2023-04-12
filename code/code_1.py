@@ -1,20 +1,20 @@
-# import necessary libraries
 import pandas as pd
-import numpy as np
-from sklearn.linear_model import LinearRegression
-# read in data
-df = pd.read_csv('weather_data.csv')
-# create features and target
-X = df.iloc[:, :-1]
-y = df.iloc[:, -1]
-# fit linear regression model
-model = LinearRegression()
-model.fit(X, y)
-# make predictions
-predictions = model.predict(X)
-# write report
-with open('weather_report.md', 'w') as f:
-    f.write('# Weather Report for SF Today\n\n')
-    f.write('Based on the previous 5 days of data, the weather in SF today is predicted to be: {}\n\n'.format(predictions[-1]))
-    f.write('The following table shows the data used to make the prediction:\n\n')
-    f.write(df.to_markdown())
+from sklearn.model_selection import GridSearchCV
+from sklearn.ensemble import RandomForestRegressor
+data = pd.read_csv('data.csv')
+parameters = {
+    'n_estimators': [10, 50, 100],
+    'max_depth': [2, 5, 10]
+}
+model = RandomForestRegressor()
+clf = GridSearchCV(model, parameters, cv=5)
+clf.fit(data.drop('temperature', axis=1), data['temperature'])
+# Evaluate the model
+score = clf.score(data.drop('temperature', axis=1), data['temperature'])
+# Write the report
+with open('model_report.md', 'w') as f:
+    f.write('# Model Report\n\n')
+    f.write('The model was tuned using hyperparameter tuning with the following parameters:\n\n')
+    f.write('- n_estimators: 10, 50, 100\n')
+    f.write('- max_depth: 2, 5, 10\n\n')
+    f.write('The model achieved an accuracy score of {}.'.format(score))

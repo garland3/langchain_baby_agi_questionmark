@@ -1,6 +1,2 @@
-# Load the data
-data = pd.read_csv('data.csv')
-# Make predictions
-predictions = model.predict(data)
-# Print the predictions
-print(predictions)
+
+The data used for the model consists of *list(data.columns.drop('temperature'))* and the target variable is temperature.

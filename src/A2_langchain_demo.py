@@ -22,13 +22,15 @@ from langchain.vectorstores.base import VectorStore
 from pydantic import BaseModel, Field
 from langchain.chains.base import Chain
 
+from llminterface.llm_wrapper import ChatSession
+
 # get OPENAI_API_KEY from env var, use s
 import os
 
 import tomli
 from pathlib import Path
 
-from helper import CodeInterp, CodeSaver, LLMTextToCode
+from helper import CodeInterp, CodeSaver, LLMTextToCode, banner
 # return(OPENAI_API_KEY)
 
 # read ~/.llminteface/.secrets.toml
@@ -78,6 +80,8 @@ vectorstore = FAISS(embeddings_model.embed_query, index, InMemoryDocstore({}), {
 # - Execution Chain to execute the tasks
 
 # %%
+
+# %%
 class TaskCreationChain(LLMChain):
     """Chain to generates tasks."""
 
@@ -122,6 +126,26 @@ class TaskPrioritizationChain(LLMChain):
         )
         return cls(prompt=prompt, llm=llm, verbose=verbose)
 
+class CodeFixerChain(LLMChain):
+    """Chain to fix code."""
+
+    @classmethod
+    def from_llm(cls, llm: BaseLLM, verbose: bool = True) -> LLMChain:
+        """Get the response parser."""
+        code_fixer_template = (
+            "```python\n {code}.```\n\n"
+            "You are a code fixer AI tasked with fixing the code:\n"
+            "The code was run and has this stderr output: {stderr}.\n"
+            "You must always return  python code and nothing else.\n"
+            "If you needed to call a system function, then you can use the `os` module.\n"
+            "Do NOT return markdown, but only return python code.\n"
+            "Your code :\n\n"            
+        )
+        prompt = PromptTemplate(
+            template=code_fixer_template,
+            input_variables=["code", "stderr"],
+        )
+        return cls(prompt=prompt, llm=llm, verbose=verbose)
 
 # %%
 class ExecutionChain(LLMChain):
@@ -133,6 +157,7 @@ class ExecutionChain(LLMChain):
         execution_template = (
             "You are an AI tasked with performing the following objective: {objective}. "
             "Here is some context on previous tasks completed: {context}. "
+            "Some of those tasks may be incomplete. If code is involved it may have errors. So please verify a previous step was finished before moving on. "
             "If you include ```python\ncode\n``` in your response, it will be executed. I can only use code if it is in a python code block."
             "`mycode` will not be executed. You must always say it is python code."
             "Feel free to use Python as needed to complete your task. "
@@ -160,6 +185,21 @@ class ExecutionChain(LLMChain):
         print("Code found!")
         ci = CodeInterp()
         ci.run_codes(lang_code_dict)
+        for j in range(5):
+            print("Fixing code iteration: ", j)
+            if ci.clean_stderr() != "":
+                print("Error found!")
+                codefixer = CodeFixerChain.from_llm(self.llm)
+                python_code = codefixer.run(code=lang_code_dict['python'], stderr=ci.clean_stderr())
+                print("Code fixer output: ", python_code, "\n\n")
+                fixer_lang_code_dict = {"python": python_code}
+                # fixer_lang_code_dict = llmtext2code.parse_llm_text(output_code)
+                cs.save_code_dict(fixer_lang_code_dict)
+                ci.run_codes(fixer_lang_code_dict)
+            else:
+                banner("Code works!")
+                break
+   
         
         text += "\nAfter running the code std error:\n\n"+ ci.clean_stderr() + "\n\n std out:\n\n" + ci.clean_stdout()
 

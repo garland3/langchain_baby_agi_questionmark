@@ -17,3 +17,6 @@ build/
 # Other files
 *.pyc
 .DS_Store
+
+code
+_temp

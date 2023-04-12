@@ -1,26 +1,33 @@
-# Import necessary libraries
-import requests
 import pandas as pd
-from sklearn.linear_model import LinearRegression
-# Get data from Dark Sky API
-url = 'https://api.darksky.net/forecast/[API KEY]/37.7749,-122.4194'
-response = requests.get(url)
-data = response.json()
-# Create a dataframe with the data
-df = pd.DataFrame(data['daily']['data'])
-# Create a linear regression model
-X = df[['temperatureHigh', 'temperatureLow', 'humidity', 'pressure', 'windSpeed']]
-y = df['precipProbability']
-model = LinearRegression().fit(X, y)
-# Make a prediction for today
-today_data = [data['currently']['temperatureHigh'], data['currently']['temperatureLow'], data['currently']['humidity'], data['currently']['pressure'], data['currently']['windSpeed']]
-prediction = model.predict([today_data])
-# Write the report to a file
-with open('weather_report.md', 'w') as f:
-    f.write('# Weather Report for SF Today\n\n')
-    f.write('Today\'s forecast is for a high of {}°F and a low of {}°F. The humidity is {}%, the pressure is {}mb, and the wind speed is {}mph. The chance of precipitation is {}%.\n\n'.format(data['currently']['temperatureHigh'], data['currently']['temperatureLow'], data['currently']['humidity'], data['currently']['pressure'], data['currently']['windSpeed'], round(prediction[0]*100, 2)))
-    f.write('The predictive model was created using the data from the past 5 days.\n\n')
-    f.write('| Date | High | Low | Humidity | Pressure | Wind Speed | Precipitation |\n')
-    f.write('|------|------|-----|----------|----------|------------|---------------|\n')
-    for index, row in df.iterrows():
-        f.write('| {} | {}°F | {}°F | {}% | {}mb | {}mph | {}% |\n'.format(index, row['temperatureHigh'], row['temperatureLow'], row['humidity'], row['pressure'], row['windSpeed'], round(row['precipProbability']*100, 2)))
+import numpy as np
+# Load the data
+data = pd.read_csv('data.csv')
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(data.drop('temperature', axis=1),
+                                                    data['temperature'],
+                                                    test_size=0.2,
+                                                    random_state=0)
+# Define the parameters to be tuned
+parameters = {'max_depth': [2, 4, 6, 8],
+              'min_samples_leaf': [2, 4, 6, 8],
+              'min_samples_split': [2, 4, 6, 8]}
+# Use grid search to find the best combination of parameters
+clf = GridSearchCV(DecisionTreeRegressor(), parameters, cv=5)
+clf.fit(X_train, y_train)
+# Create a model with the best parameters
+model = DecisionTreeRegressor(max_depth=clf.best_params_['max_depth'],
+                              min_samples_leaf=clf.best_params_['min_samples_leaf'],
+                              min_samples_split=clf.best_params_['min_samples_split'])
+# Evaluate the model's performance
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+accuracy = r2_score(y_test, y_pred)
+# Model Report
+## Summary of Data
+The data used for the model consists of [list of features] and the target variable is temperature.
+## Summary of Model Performance
+The model achieved an accuracy of [accuracy] on the test set.
+## Todo List
+- [ ] Tune additional model parameters
+- [ ] Try different model architectures
+- [ ] Try different hyperparameter optimization techniques
