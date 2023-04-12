@@ -1,0 +1,19 @@
+# Compiled Python files (keep these files in individual projects)
+__pycache__/
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# Local development settings
+*.env
+*.log
+
+# IDE files
+.idea/
+.vscode/
+
+# Other files
+*.pyc
+.DS_Store
