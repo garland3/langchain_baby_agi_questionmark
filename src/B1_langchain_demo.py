@@ -1,17 +1,7 @@
 # %% [markdown]
-# # BabyAGI User Guide
-# 
-# This notebook demonstrates how to implement [BabyAGI](https://github.com/yoheinakajima/babyagi/tree/main) by [Yohei Nakajima](https://twitter.com/yoheinakajima). BabyAGI is an AI agent that can generate and pretend to execute tasks based on a given objective.
-# 
-# This guide will help you understand the components to create your own recursive agents.
-# 
-# Although BabyAGI uses specific vectorstores/model providers (Pinecone, OpenAI), one of the benefits of implementing it with LangChain is that you can easily swap those out for different options. In this implementation we use a FAISS vectorstore (because it runs locally and is free).
-
-# %% [markdown]
 import os
 from collections import deque
 from typing import Dict, List, Optional, Any
-
 from langchain import LLMChain, OpenAI, PromptTemplate
 from langchain.embeddings import OpenAIEmbeddings
 from langchain.llms import BaseLLM
@@ -24,6 +14,12 @@ import os
 import tomli
 from pathlib import Path
 from helper import CodeInterp, CodeSaver, LLMTextToCode, banner
+import os
+import datetime
+from langchain.vectorstores import FAISS
+from langchain.docstore import InMemoryDocstore
+# pip install faiss-cpu
+import faiss
 
 # read ~/.llminteface/.secrets.toml
 # get the openaikey value. 
@@ -35,8 +31,6 @@ with open(str(Path.home() / '.llminterface/.secrets.toml'), 'rb') as f:
 
 # 
 # Depending on what vectorstore you use, this step may look different.
-import os
-import datetime
 
 
 class ChatSessionWrapper:
@@ -67,25 +61,17 @@ class ChatSessionWrapper:
 # print(response)
 
 # %%
-from langchain.vectorstores import FAISS
-from langchain.docstore import InMemoryDocstore
-
-# %%
 # Define your embedding model
 embeddings_model = OpenAIEmbeddings()
 # Initialize the vectorstore as empty
-# pip install faiss-cpu
-import faiss
-
-
 embedding_size = 1536
 index = faiss.IndexFlatL2(embedding_size)
 vectorstore = FAISS(embeddings_model.embed_query, index, InMemoryDocstore({}), {})
 
 # %% [markdown]
-# ## Define the Chains
+# ## Define the ChatWrappers
 # 
-# BabyAGI relies on three LLM chains:
+# BabyAGI relies on three ChatWrappers:
 # - Task creation chain to select new tasks to add to the list
 # - Task prioritization chain to re-prioritize tasks
 # - Execution Chain to execute the tasks
@@ -102,12 +88,15 @@ class TaskCreationChain(ChatSessionWrapper):
         task_creation_template = (
             "You are an task creation AI that uses the result of an execution agent"
             " to create new tasks with the following objective: {objective},"
-            " The last completed task has the result: {result}."
+            " The last task run has the result: {result}."
             " This result was based on this task description: {task_description}."
             " These are incomplete tasks: {incomplete_tasks}."
             " Based on the result, create new tasks to be completed"
             " by the AI system that do not overlap with incomplete tasks."
             " Return the tasks as an array."
+            "Only return the new tasks."
+            "Do not return any commentary on the tasks"
+            "Your response MUST only be bullet points."
         )
         chat_session = ChatSession()
         chat_session_wrapper = cls(
@@ -198,9 +187,8 @@ class ExecutionChain(ChatSessionWrapper):
 
     def run(self, *args, **kwargs):
         # call the super class's run method
-        # convert to a dict
-        args2 = 
-        text = super().run(*args, **kwargs)
+        print('run', args, kwargs)
+        text = super().run(*args, kwargs)
 
         llmtext2code = LLMTextToCode()
         lang_code_dict = llmtext2code.parse_llm_text(text)
@@ -217,7 +205,7 @@ class ExecutionChain(ChatSessionWrapper):
             print("Fixing code iteration: ", j)
             if ci.clean_stderr() != "":
                 print("Error found!")
-                codefixer = CodeFixerChain.from_llm(self.llm)
+                codefixer = CodeFixerChain.from_llm()
                 python_code = codefixer.run(code=lang_code_dict['python'], stderr=ci.clean_stderr())
                 print("Code fixer output: ", python_code, "\n\n")
                 fixer_lang_code_dict = {"python": python_code}
@@ -227,12 +215,8 @@ class ExecutionChain(ChatSessionWrapper):
             else:
                 banner("Code works!")
                 break
-   
-        
         text += "\nAfter running the code std error:\n\n"+ ci.clean_stderr() + "\n\n std out:\n\n" + ci.clean_stdout()
-
         return text
-        
         
 
 
@@ -242,7 +226,7 @@ class ExecutionChain(ChatSessionWrapper):
 # BabyAGI composes the chains defined above in a (potentially-)infinite loop.
 
 # %%
-def get_next_task(task_creation_chain: LLMChain, result: Dict, task_description: str, task_list: List[str], objective: str) -> List[Dict]:
+def get_next_task(task_creation_chain: TaskCreationChain, result: Dict, task_description: str, task_list: List[str], objective: str) -> List[Dict]:
     """Get the next task."""
     incomplete_tasks = ", ".join(task_list)
     response = task_creation_chain.run(result=result, task_description=task_description, incomplete_tasks=incomplete_tasks, objective=objective)
@@ -250,7 +234,7 @@ def get_next_task(task_creation_chain: LLMChain, result: Dict, task_description:
     return [{"task_name": task_name} for task_name in new_tasks if task_name.strip()]
 
 # %%
-def prioritize_tasks(task_prioritization_chain: LLMChain, this_task_id: int, task_list: List[Dict], objective: str) -> List[Dict]:
+def prioritize_tasks(task_prioritization_chain: ChatSessionWrapper, this_task_id: int, task_list: List[Dict], objective: str) -> List[Dict]:
     """Prioritize tasks."""
     task_names = [t["task_name"] for t in task_list]
     next_task_id = int(this_task_id) + 1
@@ -276,14 +260,14 @@ def _get_top_tasks(vectorstore, query: str, k: int) -> List[str]:
     sorted_results, _ = zip(*sorted(results, key=lambda x: x[1], reverse=True))
     return [str(item.metadata['task']) for item in sorted_results]
 
-def execute_task(vectorstore, execution_chain: LLMChain, objective: str, task: str, k: int = 5) -> str:
+def execute_task(vectorstore, execution_chain: LLMChain, objective: Dict, task: str, k: int = 5) -> str:
     """Execute a task."""
-    context = _get_top_tasks(vectorstore, query=objective, k=k)
+    context = _get_top_tasks(vectorstore, query=objective['objective'], k=k)
     return execution_chain.run(objective=objective, context=context, task=task)
 
 # %%
 
-class BabyAGI(Chain,BaseModel ):
+class BabyAGI(BaseModel ):
     """Controller model for the BabyAGI agent."""
 
     task_list: deque = Field(default_factory=deque)
@@ -322,9 +306,9 @@ class BabyAGI(Chain,BaseModel ):
     def output_keys(self) -> List[str]:
         return []
 
-    def _call(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+    def __call__(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Run the agent."""
-        objective = inputs['objective']
+        objective = {'objective':inputs['objective']}
         first_task = inputs.get("first_task", "Make a todo list")
         self.add_task({"task_id": 1, "task_name": first_task})
         num_iters = 0
@@ -372,8 +356,7 @@ class BabyAGI(Chain,BaseModel ):
 
     @classmethod
     def from_llm(
-        cls,
-        llm: BaseLLM,
+        cls,     
         vectorstore: VectorStore,
         verbose: bool = False,
         **kwargs
@@ -400,15 +383,14 @@ class BabyAGI(Chain,BaseModel ):
 OBJECTIVE = "Look at the file data.csv. Make a machine learning model to predict temperature. Note the performance of the model. Write a report about the model to a file called model_report.md. I will render it and then give the report to the CEO, so make it clear and look good. "
 
 # %%
-llm = OpenAI(temperature=0, max_tokens= 1000)
+# llm = OpenAI(temperature=0, max_tokens= 1000)
 
 # %%
 # Logging of LLMChains
 verbose=False
 # If None, will keep on going forever
 max_iterations: Optional[int] = 30
-baby_agi = BabyAGI.from_llm(
-    llm=llm,
+baby_agi = BabyAGI.from_llm(  
     vectorstore=vectorstore,
     verbose=verbose,
     max_iterations=max_iterations

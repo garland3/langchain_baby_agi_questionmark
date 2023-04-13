@@ -1,10 +1,7 @@
-
-import os
-
-try:
-    X = data.drop('Temperature', axis=1)
-except KeyError as e:
-    if 'Temperature' in str(e):
-        os.system('echo Temperature not found in data.csv > model_report.md')
-    else:
-        raise e
+import pandas as pd
+# Read the CSV file into a DataFrame
+data = pd.read_csv("data.csv")
+# Check the percentage of missing values in each column
+missing_percent = (data.isna().sum() / len(data)) * 100
+# Print the percentage of missing values for each column
+print(missing_percent)

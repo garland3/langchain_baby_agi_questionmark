@@ -94,13 +94,14 @@ class TaskCreationChain(LLMChain):
             " The last completed task has the result: {result}."
             " This result was based on this task description: {task_description}."
             " These are incomplete tasks: {incomplete_tasks}."
+            " A short summary of previously completed tasks is {summary_of_prevous_tasks}"
             " Based on the result, create new tasks to be completed"
             " by the AI system that do not overlap with incomplete tasks."
             " Return the tasks as an array."
         )
         prompt = PromptTemplate(
             template=task_creation_template,
-            input_variables=["result", "task_description", "incomplete_tasks", "objective"],
+            input_variables=["result", "task_description", "incomplete_tasks", "objective", "summary_of_prevous_tasks"],
         )
         return cls(prompt=prompt, llm=llm, verbose=verbose)
 
@@ -136,10 +137,7 @@ class CodeFixerChain(LLMChain):
             "```python\n {code}.```\n\n"
             "You are a code fixer AI tasked with fixing the code:\n"
             "The code was run and has this stderr output: {stderr}.\n"
-            "You must always return  python code and nothing else.\n"
-            "If you needed to call a system function, then you can use the `os` module.\n"
-            "Do NOT return markdown, but only return python code.\n"
-            "Your code :\n\n"            
+            "Fix the code so it runs without errors."            
         )
         prompt = PromptTemplate(
             template=code_fixer_template,
@@ -190,10 +188,9 @@ class ExecutionChain(LLMChain):
             if ci.clean_stderr() != "":
                 print("Error found!")
                 codefixer = CodeFixerChain.from_llm(self.llm)
-                python_code = codefixer.run(code=lang_code_dict['python'], stderr=ci.clean_stderr())
-                print("Code fixer output: ", python_code, "\n\n")
-                fixer_lang_code_dict = {"python": python_code}
-                # fixer_lang_code_dict = llmtext2code.parse_llm_text(output_code)
+                output_code = codefixer.run(code=lang_code_dict['python'], stderr=ci.clean_stderr())
+                fixer_lang_code_dict = llmtext2code.parse_llm_text(output_code)
+                print("Code fixer output: ", output_code, "\n\n")
                 cs.save_code_dict(fixer_lang_code_dict)
                 ci.run_codes(fixer_lang_code_dict)
             else:

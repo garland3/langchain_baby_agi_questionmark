@@ -1,3 +1,6 @@
+# %%
+
+
 import numpy as np
 from transformers import (
     AutoModelForCausalLM,
@@ -44,5 +47,8 @@ def generate_response(instruction: str, *, model: PreTrainedModel, tokenizer: Pr
 
     return None
 
+
+# %%
 # Sample similar to: "Excited to announce the release of Dolly, a powerful new language model from Databricks! #AI #Databricks"
 generate_response("Write a tweet announcing Dolly, a large language model from Databricks.", model=model, tokenizer=tokenizer)
+# %%
