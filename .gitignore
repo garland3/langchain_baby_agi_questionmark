@@ -1,3 +1,4 @@
+_temp
 # Compiled Python files (keep these files in individual projects)
 __pycache__/
 
@@ -20,3 +21,5 @@ build/
 
 code
 _temp
+
+.secrets.toml
