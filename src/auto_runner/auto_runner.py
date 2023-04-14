@@ -8,9 +8,11 @@ from pydantic import BaseModel, Field
 from llminterface.llm_wrapper import ChatSession
 # get OPENAI_API_KEY from env var, use s
 import os
-import tomli
+
+
+
 from pathlib import Path
-from C1_chat_chains import ExecutionChain, Task, TaskCreationChain, TaskPrioritizationChain
+from auto_runner.chat_chains import ExecutionChain, Task, TaskCreationChain, TaskPrioritizationChain
 from helper import CodeInterp, CodeSaver, LLMTextToCode, banner
 from langchain.vectorstores import FAISS
 from langchain.docstore import InMemoryDocstore
@@ -179,3 +181,4 @@ objective = "Look at the file data.csv. Make a machine learning model to predict
 
 loopy = AILoop(objective, max_runs=200)
 loopy.run()
+# %%

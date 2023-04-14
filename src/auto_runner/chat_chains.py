@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from llminterface.llm_wrapper import ChatSession
 # get OPENAI_API_KEY from env var, use s
 import os
-import tomli
 from pathlib import Path
 from helper import CodeInterp, CodeSaver, LLMTextToCode, banner
 from langchain.vectorstores import FAISS
@@ -16,10 +15,15 @@ from langchain.docstore import InMemoryDocstore
 # pip install faiss-cpu
 import faiss
 
-# read ~/.llminteface/.secrets.toml
-# get the openaikey value. 
-with open(str(Path.home() / '.llminterface/.secrets.toml'), 'rb') as f:
-    secrets = tomli.load(f)
+# Read the secrets.toml file in ~/.llminterface directory
+# Extract the value of openaikey
+import toml
+import os
+from pathlib import Path
+
+secret_file = str(Path.home() / '.llminterface/.secrets.toml')
+with open(secret_file, 'r') as f:
+    secrets = toml.load(f)
     openai_key = secrets['openaikey']
     os.environ['OPENAI_API_KEY'] = openai_key
 
@@ -127,6 +131,8 @@ class CodeFixerChain(ChatSessionWrapper):
             "The code was run and has this stderr output: {stderr}.\n"
             "The code was run and has this stdout output: {stdout}.\n"
             "You can run python or bash code. You must use code blocks to run code. Inline code will not work. \n"
+            "If you run a bash command, you must use the ```bash code block. \n"
+            "Do not use ! to run bash commands. \n"
             "As your expert advisor. I would recommend that you add lots of print statements to help you debug your code and help future tasks."            
                         "Your code :\n\n"            
         )
